@@ -1,3 +1,4 @@
+
 FROM php:8.2-apache
 
 # Install required system packages and PHP extensions
@@ -22,8 +23,10 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # Install Laravel dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Set proper permissions
-RUN chown -R www-data:www-data storage bootstrap/cache
+# Create upload directory and set permissions
+RUN mkdir -p public/uploads \
+    && chown -R www-data:www-data storage bootstrap/cache public/uploads \
+    && chmod -R 775 storage bootstrap/cache public/uploads
 
 # Configure Apache to use Laravel public directory
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' \
@@ -41,3 +44,4 @@ EXPOSE 80
 
 # Run Laravel migrations and start Apache
 CMD ["sh", "-c", "php artisan migrate --force && apache2-foreground"]
+
