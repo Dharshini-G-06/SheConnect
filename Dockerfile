@@ -1,6 +1,6 @@
 FROM php:8.2-apache
 
-# Install required system packages
+# Install required system packages and PHP extensions
 RUN apt-get update && apt-get install -y \
     unzip \
     libzip-dev \
@@ -26,10 +26,15 @@ RUN composer install --no-dev --optimize-autoloader
 RUN chown -R www-data:www-data storage bootstrap/cache
 
 # Configure Apache to use Laravel public directory
-RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' /etc/apache2/sites-available/000-default.conf
+RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' \
+    /etc/apache2/sites-available/000-default.conf
 
-# Configure Apache directory permissions
-RUN sed -i 's|<Directory /var/www/>|<Directory /var/www/html/public>|' /etc/apache2/apache2.conf
+# Allow Laravel .htaccess to handle routes
+RUN printf '<Directory /var/www/html/public>\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>\n' > /etc/apache2/conf-available/laravel.conf \
+    && a2enconf laravel
 
 # Expose Apache port
 EXPOSE 80
