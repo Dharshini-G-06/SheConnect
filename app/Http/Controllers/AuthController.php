@@ -39,93 +39,97 @@ class AuthController extends Controller
     // =========================================================
 
     public function sendOtp(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email'
+{
+    $request->validate([
+        'email' => 'required|email'
+    ]);
+
+    $student = Student::where('email', $request->email)->first();
+
+    if (!$student) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Email Not Registered'
         ]);
-
-        $student = Student::where('email', $request->email)->first();
-
-        // Check student before accessing student details
-        if (!$student) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Email Not Registered'
-            ]);
-        }
-
-        $otp = rand(100000, 999999);
-
-        session([
-            'student_id' => $student->id,
-            'student_email' => $student->email,
-            'login_email' => $request->email,
-            'login_otp' => $otp
-        ]);
-
-        try {
-
-            $response = Http::withHeaders([
-                'accept' => 'application/json',
-                'api-key' => env('BREVO_API_KEY'),
-                'content-type' => 'application/json'
-            ])->post('https://api.brevo.com/v3/smtp/email', [
-
-                'sender' => [
-                    'name' => env('MAIL_FROM_NAME', 'SheConnect'),
-                    'email' => env('MAIL_FROM_ADDRESS')
-                ],
-
-                'to' => [
-                    [
-                        'email' => $request->email,
-                        'name' => $student->name
-                    ]
-                ],
-
-                'subject' => 'SheConnect Login OTP',
-
-                'htmlContent' => '
-                    <div style="font-family: Arial, sans-serif; padding: 20px;">
-                        <h2>SheConnect Login Verification</h2>
-
-                        <p>Hello ' . e($student->name) . ',</p>
-
-                        <p>Your OTP for SheConnect login is:</p>
-
-                        <h1 style="letter-spacing: 5px;">' . $otp . '</h1>
-
-                        <p>Please do not share this OTP with anyone.</p>
-
-                        <p>
-                            Regards,<br>
-                            <strong>SheConnect Team</strong>
-                        </p>
-                    </div>
-                ',
-            ]);
-
-            if ($response->successful()) {
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'OTP Sent Successfully'
-                ]);
-            }
-
-            return response()->json([
-                'status' => false,
-                'message' => 'Unable to send OTP. Please try again.'
-            ]);
-
-        } catch (\Exception $e) {
-
-            return response()->json([
-                'status' => false,
-                'message' => 'Email service error. Please try again later.'
-            ]);
-        }
     }
+
+    // Generate 6 digit OTP
+    $otp = rand(100000, 999999);
+
+    // Store OTP in session
+    session([
+        'student_id' => $student->id,
+        'student_email' => $student->email,
+        'login_email' => $request->email,
+        'login_otp' => $otp
+    ]);
+
+    try {
+
+        $response = Http::withHeaders([
+            'accept' => 'application/json',
+            'api-key' => env('BREVO_API_KEY'),
+            'content-type' => 'application/json'
+        ])->post('https://api.brevo.com/v3/smtp/email', [
+
+            'sender' => [
+                'name' => env('MAIL_FROM_NAME', 'SheConnect'),
+                'email' => env('MAIL_FROM_ADDRESS')
+            ],
+
+            'to' => [
+                [
+                    'email' => $request->email,
+                    'name' => $student->name
+                ]
+            ],
+
+            'subject' => 'SheConnect Login OTP',
+
+            'htmlContent' => '
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>SheConnect Login Verification</h2>
+
+                    <p>Hello ' . e($student->name) . ',</p>
+
+                    <p>Your OTP for SheConnect login is:</p>
+
+                    <h1 style="letter-spacing: 5px;">' . $otp . '</h1>
+
+                    <p>This OTP is valid for this login session.</p>
+
+                    <p>If you did not request this OTP, please ignore this email.</p>
+
+                    <br>
+
+                    <p>Regards,<br>
+                    SheConnect Team</p>
+                </div>
+            '
+        ]);
+
+        if ($response->successful()) {
+
+            return response()->json([
+                'status' => true,
+                'message' => 'OTP Sent Successfully'
+            ]);
+
+        }
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Unable to send OTP. Brevo Error: ' . $response->body()
+        ]);
+
+    } catch (\Exception $e) {
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Unable to send OTP: ' . $e->getMessage()
+        ]);
+    }
+}
 
     // =========================================================
     // VERIFY LOGIN
